@@ -1,0 +1,9 @@
+*.o
+*.d
+firmware
+firmware.bin
+firmware.map
+commit-id.txt
+md5sum.txt
+flashconfig
+debug.log

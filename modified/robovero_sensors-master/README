@@ -1,0 +1,7 @@
+For detailed information on using the sensor patch and the C example, please visit:
+http://www.agottem.com/robovero_sensors
+
+sensors.patch can be used to modify the default robovero firmware.  The modification will improve
+the maximum sensor sample rate.
+
+robocomm.c demonstrates how to connect and control a Robovero with C.
