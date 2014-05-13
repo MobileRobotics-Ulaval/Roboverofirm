@@ -31,6 +31,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  ******************************************************************************/
+#define i2cextern LPC_I2C2
 
 #include "table.h"
 #include "return.h"
@@ -206,14 +207,100 @@ int _configAccel (uint8_t* args)
     return 0;
 }
 
+// adresse I2C
+#define MIN_IND				0
+#define IND_LUMINEUX_0			0x12//0xCE//C0
+#define IND_LUMINEUX_2			0x14//0xC2
+#define IND_LUMINEUX_4			0x16//0xC4
+#define IND_LUMINEUX_6			0x18//0xC6
+#define IND_LUMINEUX_8			0xC8
+#define IND_LUMINEUX_A			0xCA
+#define IND_LUMINEUX_C			0xCC
+#define IND_LUMINEUX_E			0xD2
+#define MAX_IND				8
+//Registres en ecriture
+#define goRGB				110
+#define fadeRGB				99
+#define stopS				111
+
+int _setind(uint8_t* args)
+{
+    I2C_M_SETUP_Type setup;
+    char*            arg_ptr;
+    unsigned int     index;
+    Status           result;
+    uint8_t          transmit_buffer[4];
+    uint32_t          arguments[5];
+    uint8_t          receive_buffer;
+  //i2c_smbus_write_word_data(file, commande, (argument << 8) | info1) >= 0
+  for(index = 0; index < 5; index++)
+    {
+        arg_ptr = strtok(NULL, " ");
+        if(arg_ptr == NULL)
+            return 1;
+
+        arguments[index] = strtoul(arg_ptr, NULL, 16);
+    }
+   
+  setup.sl_addr7bit         = arguments[0];
+  setup.retransmissions_max = MAX_ST_I2C_RETRANSMISSIONS;
+  setup.tx_data   = transmit_buffer;
+  setup.tx_length = 4;
+  setup.rx_data   = &receive_buffer;
+  setup.rx_length = 0;
+  
+  transmit_buffer[0] = arguments[1];
+  transmit_buffer[1] = arguments[2];
+  transmit_buffer[2] = arguments[3];
+  transmit_buffer[3] = arguments[4];
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
+  if(result == 1)
+    return 1;
+  
+  return 0;
+}
+
 //#define MOTORXP_I2C_SLAVE_ADDRESS    		0xb0
 #define	COMMAND_INIT				0x01
 #define	COMMAND_SEND_RPM		        0x02
 #define MOT_RPM					0x03
 #define MOT_VOLT				0x04
 #define MOT_CURR				0x05
-#define MOT_TEMP				0x06
-#define MOT_STOP				0x07
+
+int _initbl(uint8_t* args)
+{
+    I2C_M_SETUP_Type setup;
+    char*            arg_ptr;
+    unsigned int     index;
+    Status           result;
+    uint8_t          transmit_buffer[2];
+    uint32_t          arguments[2];
+    uint8_t          receive_buffer;
+  //i2c_smbus_write_word_data(file, commande, (argument << 8) | info1) >= 0
+  for(index = 0; index < 2; index++)
+    {
+        arg_ptr = strtok(NULL, " ");
+        if(arg_ptr == NULL)
+            return 1;
+
+        arguments[index] = strtoul(arg_ptr, NULL, 16);
+    }
+   
+  setup.sl_addr7bit         = arguments[0];
+  setup.retransmissions_max = MAX_ST_I2C_RETRANSMISSIONS;
+  setup.tx_data   = transmit_buffer;
+  setup.tx_length = 3;
+  setup.rx_data   = &receive_buffer;
+  setup.rx_length = 0;
+  
+  transmit_buffer[0] = COMMAND_INIT;
+  transmit_buffer[1] = arguments[1];
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
+  if(result == 1)
+    return 1;
+
+  return 0;
+}
 
 int _sendblspeed(uint8_t* args)
 {
@@ -244,7 +331,7 @@ int _sendblspeed(uint8_t* args)
   transmit_buffer[0] = COMMAND_SEND_RPM;
   transmit_buffer[1] = arguments[1];
   transmit_buffer[2] = arguments[2];
-  result = I2C_MasterTransferData(LPC_I2C0, &setup, I2C_TRANSFER_POLLING);
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
   if(result == 1)
     return 1;
 
@@ -261,6 +348,7 @@ int _getbldata(uint8_t* args)
     uint8_t          arguments;
     uint8_t          receive_buffer;
     char*            formatted_string;
+    unsigned int value, formatted_size;
   //i2c_smbus_write_word_data(file, commande, (argument << 8) | info1) >= 0
   for(index = 0; index < 1; index++)
     {
@@ -278,17 +366,32 @@ int _getbldata(uint8_t* args)
   setup.rx_data   = &receive_buffer;
   setup.rx_length = 1;
   
-  transmit_buffer = MOT_VOLT;
-  result = I2C_MasterTransferData(LPC_I2C0, &setup, I2C_TRANSFER_POLLING);
+  formatted_string=(char*)str;
+  
+  transmit_buffer = MOT_RPM;
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
   if(result == 1)
     return 1;
-  int16_t* mot_data = (int16_t*)receive_buffer;
-  unsigned int value = (unsigned int)(*mot_data);
-
-  int formatted_size = sprintf(formatted_string, "%x\r\n", value);
+  formatted_size = sprintf(formatted_string, "%x\r\n", receive_buffer);
   if(formatted_size > 0)
       formatted_string += formatted_size;
-	
+  
+  transmit_buffer = MOT_VOLT;
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
+  if(result == 1)
+    return 1;
+  formatted_size = sprintf(formatted_string, "%x\r\n", receive_buffer);
+  if(formatted_size > 0)
+      formatted_string += formatted_size;
+  
+  transmit_buffer = MOT_CURR;
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
+  if(result == 1)
+    return 1;
+  formatted_size = sprintf(formatted_string, "%x\r\n", receive_buffer);
+  if(formatted_size > 0)
+      formatted_string += formatted_size;
+  
   writeUSBOutString(str);
   
   return 0;
@@ -360,25 +463,94 @@ int _initsonar(uint8_t* args)
     }
 
   transmit_buffer[0] = SONAR_RANGE;
-  transmit_buffer[1] = ctrl_reg_1_a_value;
+  transmit_buffer[1] = SONAR_RANGE_6;//ctrl_reg_1_a_value;
   setup.tx_data   = transmit_buffer;
   setup.tx_length = 2;
   setup.rx_data   = &receive_buffer;
   setup.rx_length = 0;
-  result = I2C_MasterTransferData(LPC_I2C0, &setup, I2C_TRANSFER_POLLING);
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
   if(result == ERROR)
       return 1;
-
+  _sonar_wait(arguments[0]);
+  
   if(arguments[2]>24)
     arguments[2]=24;
   
   transmit_buffer[0] = SONAR_GAIN;
-  transmit_buffer[1] = arguments[2];
+  transmit_buffer[1] = SONAR_GAIN_DEFAULT;//arguments[2];
   setup.tx_data   = transmit_buffer;
-  result = I2C_MasterTransferData(LPC_I2C0, &setup, I2C_TRANSFER_POLLING);
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
   if(result == ERROR)
       return 1;
+  _sonar_wait(arguments[0]);
   
+  return 0;
+}
+
+#define	BOUSSOLE			0xC0
+#define BOUSSOLE_SOFTWARE_REVISION	0x00
+#define BOUSSOLE_BEARING_WORD_HIGH	0x02
+#define BOUSSOLE_BEARING_WORD_LOW	0x03
+int _getheading(uint8_t* args)
+{
+  I2C_M_SETUP_Type setup;
+  Status           result;
+  uint8_t          transmit_buffer[1];
+  uint8_t          receive_buffer;
+  unsigned int     heading=0;
+  uint16_t	   value[2];
+  
+  setup.sl_addr7bit         = (int)BOUSSOLE/2;
+  setup.retransmissions_max = MAX_ST_I2C_RETRANSMISSIONS;
+  //Get the distance value
+  setup.tx_data   = transmit_buffer;
+  setup.tx_length = 1;
+  setup.rx_data   = &receive_buffer;
+  setup.rx_length = 1;
+  
+  transmit_buffer[0] = BOUSSOLE_BEARING_WORD_HIGH;
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
+  if(result == ERROR)
+    heading = 1000;
+  value[0] = (uint16_t)receive_buffer;
+  
+  transmit_buffer[0] = BOUSSOLE_BEARING_WORD_LOW;
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
+  if(result == ERROR)
+    heading = 1000;
+  value[1]= (uint16_t)receive_buffer;
+  
+  
+  if(heading==0)
+    heading = (unsigned int)(((uint16_t)value[0]<<8)|(uint16_t)value[1]);
+
+  sprintf((char*)str, "%x\r\n", heading);
+  writeUSBOutString(str);
+  
+  return 0;
+}
+
+int _sonar_wait(uint8_t id)
+{
+  I2C_M_SETUP_Type setup;
+  Status           result;
+  uint8_t          transmit_buffer;
+  uint8_t          receive_buffer;
+  //Wait until sonar is ready
+  setup.sl_addr7bit         = id;
+  setup.retransmissions_max = MAX_ST_I2C_RETRANSMISSIONS;
+  transmit_buffer = SONAR_SOFTWARE_REVISION;
+  setup.tx_data   = &transmit_buffer;
+  setup.tx_length = 1;
+  setup.rx_data   = &receive_buffer;
+  setup.rx_length = 1;
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
+  int timeout=1000;
+  while(result==ERROR && timeout>0){
+    delayMs(0,1);
+    result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
+    timeout--;
+  }
   return 0;
 }
 
@@ -412,23 +584,11 @@ int _getsonardist(uint8_t* args)
   setup.tx_length = 2;
   setup.rx_data   = &receive_buffer;
   setup.rx_length = 0;
-  result = I2C_MasterTransferData(LPC_I2C0, &setup, I2C_TRANSFER_POLLING);
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
   if(result == ERROR)
       distance = 1000;
   
-  //Wait until sonar is ready
-  transmit_buffer[0] = SONAR_SOFTWARE_REVISION;
-  setup.tx_data   = transmit_buffer;
-  setup.tx_length = 1;
-  setup.rx_data   = &receive_buffer;
-  setup.rx_length = 1;
-  result = I2C_MasterTransferData(LPC_I2C0, &setup, I2C_TRANSFER_POLLING);
-  int timeout=100;
-  while(result==ERROR && timeout>0){
-    delayMs(0,1);
-    result = I2C_MasterTransferData(LPC_I2C0, &setup, I2C_TRANSFER_POLLING);
-    timeout--;
-  }
+  _sonar_wait(arguments[0]);
   
   //Get the distance value
   setup.tx_data   = transmit_buffer;
@@ -437,13 +597,13 @@ int _getsonardist(uint8_t* args)
   setup.rx_length = 1;
   
   transmit_buffer[0] = SONAR_FIRST_ECHO_HIGH;
-  result = I2C_MasterTransferData(LPC_I2C0, &setup, I2C_TRANSFER_POLLING);
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
   if(result == ERROR)
     distance = 1000;
   value[0] = (uint16_t)receive_buffer;
   
   transmit_buffer[0] = SONAR_FIRST_ECHO_LOW;
-  result = I2C_MasterTransferData(LPC_I2C0, &setup, I2C_TRANSFER_POLLING);
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
   if(result == ERROR)
     distance = 1000;
   value[1]= (uint16_t)receive_buffer;
@@ -944,14 +1104,14 @@ int _scanI2C(uint8_t * args)
     setup.tx_data   = &transmit_buffer;
     setup.tx_length = 1;
     setup.rx_data   = &receive_buffer;
-    setup.rx_length = 1;
+    setup.rx_length = 0;
     transmit_buffer = 0x00;
     
     formatted_string = (char*)str;
     
     //for(i=1;i<128;i++){
       setup.sl_addr7bit = arguments[0];//i;
-      result = I2C_MasterTransferData(LPC_I2C0, &setup, I2C_TRANSFER_POLLING);
+      result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
       if(result != ERROR )
 	formatted_size = sprintf(formatted_string, "1\r\n");
       else
@@ -1240,14 +1400,16 @@ static void configAllPins(void)
     configPin(2, 1, 0, 0, 2);     /* RX1 */
     configPin(2, 7, 0, 0, 2);     /* RTS1 */
     configPin(2, 2, 0, 0, 2);     /* CTS1 */
-    configPin(0, 10, 0, 0, 1);    /* TX2 */
-    configPin(0, 11, 0, 0, 1);    /* RX2 */
+//    configPin(0, 10, 0, 0, 1);    /* TX2 */
+//    configPin(0, 11, 0, 0, 1);    /* RX2 */
     configPin(0, 0, 0, 0, 2);     /* TX3 */
     configPin(0, 1, 0, 0, 2);     /* RX3 */
 
     /* I2C */
     configPin(0, 27, 0, 0, 1);     /* SDA0 */
     configPin(0, 28, 0, 0, 1);     /* SCL0 */
+    configPin(0, 10, 0, 0, 2);    /* SDA2 */
+    configPin(0, 11, 0, 0, 2);    /* SCL2 */
 
     /* SPI0 */
     configPin(0, 17, 0, 0, 2);     /* MISO */
@@ -1289,6 +1451,12 @@ int _roboveroConfig(uint8_t * args)
     I2C_Init(LPC_I2C0, 100000);
     I2C_Cmd(LPC_I2C0, ENABLE);
 
+    /*
+     * Configure I2C2 for external hardware communications
+     */
+    I2C_Init(LPC_I2C2, 100000);
+    I2C_Cmd(LPC_I2C2, ENABLE);
+    
     /*
      * Initialize CAN bus
      */

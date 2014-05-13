@@ -61,9 +61,13 @@ int _configGyro(uint8_t * args);
 int _readGyro(uint8_t * args);
 int _scanI2C(uint8_t * args);
 int _sendblspeed(uint8_t * args);
+int _initbl(uint8_t * args);
 int _getbldata(uint8_t * args);
 int _initsonar(uint8_t * args);
 int _getsonardist(uint8_t * args);
+int _getheading(uint8_t * args);
+int _setind(uint8_t* args);
+int _sonar_wait(uint8_t id);
 
 void delayMs(uint8_t timer_num, uint32_t delayInMs);
 
