@@ -495,26 +495,28 @@ int _getheading(uint8_t* args)
 {
   I2C_M_SETUP_Type setup;
   Status           result;
-  uint8_t          transmit_buffer[1];
+  uint8_t          transmit_buffer;
   uint8_t          receive_buffer;
   unsigned int     heading=0;
   uint16_t	   value[2];
   
-  setup.sl_addr7bit         = (int)BOUSSOLE/2;
+  setup.sl_addr7bit         = (int)BOUSSOLE >> 1;
   setup.retransmissions_max = MAX_ST_I2C_RETRANSMISSIONS;
   //Get the distance value
-  setup.tx_data   = transmit_buffer;
+  setup.tx_data   = &transmit_buffer;
   setup.tx_length = 1;
   setup.rx_data   = &receive_buffer;
   setup.rx_length = 1;
   
-  transmit_buffer[0] = BOUSSOLE_BEARING_WORD_HIGH;
+  transmit_buffer = BOUSSOLE_BEARING_WORD_HIGH;
   result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
   if(result == ERROR)
     heading = 1000;
   value[0] = (uint16_t)receive_buffer;
   
-  transmit_buffer[0] = BOUSSOLE_BEARING_WORD_LOW;
+  delayMs(0,1);
+  
+  transmit_buffer = BOUSSOLE_BEARING_WORD_LOW;
   result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
   if(result == ERROR)
     heading = 1000;
