@@ -65,7 +65,11 @@ int _initbl(uint8_t * args);
 int _getbldata(uint8_t * args);
 int _initsonar(uint8_t * args);
 int _getsonardist(uint8_t * args);
+int _asksonardist(uint8_t * args);
+int _getsonarlum(uint8_t * args);
+int _addsonar(uint8_t * args);
 int _getheading(uint8_t * args);
+int _switchrelay(uint8_t * args);
 int _setind(uint8_t* args);
 int _sonar_wait(uint8_t id);
 

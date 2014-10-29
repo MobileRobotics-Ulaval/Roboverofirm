@@ -263,9 +263,9 @@ int _setind(uint8_t* args)
 //#define MOTORXP_I2C_SLAVE_ADDRESS    		0xb0
 #define	COMMAND_INIT				0x01
 #define	COMMAND_SEND_RPM		        0x02
-#define MOT_RPM					0x03
-#define MOT_VOLT				0x04
-#define MOT_CURR				0x05
+#define COMMAND_READ_RPM			0x03
+#define COMMAND_READ_VLT			0x04
+#define COMMAND_READ_CUR			0x05
 
 int _initbl(uint8_t* args)
 {
@@ -311,7 +311,7 @@ int _sendblspeed(uint8_t* args)
     uint8_t          transmit_buffer[3];
     uint32_t          arguments[3];
     uint8_t          receive_buffer;
-  //i2c_smbus_write_word_data(file, commande, (argument << 8) | info1) >= 0
+
   for(index = 0; index < 3; index++)
     {
         arg_ptr = strtok(NULL, " ");
@@ -349,7 +349,7 @@ int _getbldata(uint8_t* args)
     uint8_t          receive_buffer;
     char*            formatted_string;
     unsigned int value, formatted_size;
-  //i2c_smbus_write_word_data(file, commande, (argument << 8) | info1) >= 0
+  
   for(index = 0; index < 1; index++)
     {
         arg_ptr = strtok(NULL, " ");
@@ -368,30 +368,37 @@ int _getbldata(uint8_t* args)
   
   formatted_string=(char*)str;
   
-  transmit_buffer = MOT_RPM;
+  transmit_buffer = COMMAND_READ_RPM;
   result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
-  if(result == 1)
-    return 1;
-  formatted_size = sprintf(formatted_string, "%x\r\n", receive_buffer);
+  if(result == ERROR)
+    value=(unsigned int)0xFFFF;
+  else
+    value=(unsigned int)receive_buffer;
+
+  formatted_size = sprintf(formatted_string, "%x\r\n", value);
   if(formatted_size > 0)
       formatted_string += formatted_size;
-  
-  transmit_buffer = MOT_VOLT;
+
+  transmit_buffer = COMMAND_READ_VLT;
   result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
-  if(result == 1)
-    return 1;
-  formatted_size = sprintf(formatted_string, "%x\r\n", receive_buffer);
+  if(result == ERROR)
+    value=(unsigned int)0xFFFF;
+  else
+    value=(unsigned int)receive_buffer;
+  formatted_size = sprintf(formatted_string, "%x\r\n", value);
   if(formatted_size > 0)
       formatted_string += formatted_size;
-  
-  transmit_buffer = MOT_CURR;
+
+  transmit_buffer = COMMAND_READ_CUR;
   result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
-  if(result == 1)
-    return 1;
-  formatted_size = sprintf(formatted_string, "%x\r\n", receive_buffer);
+  if(result == ERROR)
+    value=(unsigned int)0xFFFF;
+  else
+    value=(unsigned int)receive_buffer;
+  formatted_size = sprintf(formatted_string, "%x\r\n", value);
   if(formatted_size > 0)
       formatted_string += formatted_size;
-  
+
   writeUSBOutString(str);
   
   return 0;
@@ -450,16 +457,13 @@ int _initsonar(uint8_t* args)
         ctrl_reg_1_a_value = SONAR_RANGE_1;
         break;
 
-    case 6:
-        ctrl_reg_1_a_value = SONAR_RANGE_6;
-        break;
-
     case 11:
         ctrl_reg_1_a_value = SONAR_RANGE_11;
         break;
 
+    case 6:
     default:
-        return 1;
+        ctrl_reg_1_a_value = SONAR_RANGE_6;
     }
 
   transmit_buffer[0] = SONAR_RANGE;
@@ -548,15 +552,18 @@ int _sonar_wait(uint8_t id)
   setup.rx_length = 1;
   result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
   int timeout=1000;
-  while(result==ERROR && timeout>0){
+  while(result==ERROR || receive_buffer==0xFF){
     delayMs(0,1);
     result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
-    timeout--;
+    if(timeout>0)
+      timeout--;
+    else
+      return -1;
   }
   return 0;
 }
 
-int _getsonardist(uint8_t* args)
+int _asksonardist(uint8_t* args)
 {
   I2C_M_SETUP_Type setup;
   char*            arg_ptr;
@@ -588,26 +595,64 @@ int _getsonardist(uint8_t* args)
   setup.rx_length = 0;
   result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
   if(result == ERROR)
-      distance = 1000;
+      distance = 0xFFF;
   
+  return 0;
+}
+
+int _getsonardist(uint8_t* args)
+{
+  I2C_M_SETUP_Type setup;
+  char*            arg_ptr;
+  unsigned int     index;
+  Status           result;
+  uint8_t          transmit_buffer;
+  uint8_t          arguments[1];
+  uint8_t          receive_buffer;
+  unsigned int     distance=0;
+  uint16_t	   value[2];
+    
+  for(index = 0; index < 1; index++)
+  {
+      arg_ptr = strtok(NULL, " ");
+      if(arg_ptr == NULL)
+	  return 1;
+
+      arguments[index] = strtoul(arg_ptr, NULL, 16);
+  }
+  
+  // Call for a measurement
+  setup.sl_addr7bit         = arguments[0];
+  setup.retransmissions_max = MAX_ST_I2C_RETRANSMISSIONS;
+  /*transmit_buffer[0] = SONAR_COMMAND;
+  transmit_buffer[1] = SONAR_RANGING_CM;
+  setup.tx_data   = transmit_buffer;
+  setup.tx_length = 2;
+  setup.rx_data   = &receive_buffer;
+  setup.rx_length = 0;
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
+  if(result == ERROR)
+      distance = 0xFFF;
+  */
   _sonar_wait(arguments[0]);
   
   //Get the distance value
-  setup.tx_data   = transmit_buffer;
+  transmit_buffer = SONAR_FIRST_ECHO_HIGH;
+  setup.tx_data   = &transmit_buffer;
   setup.tx_length = 1;
   setup.rx_data   = &receive_buffer;
   setup.rx_length = 1;
   
-  transmit_buffer[0] = SONAR_FIRST_ECHO_HIGH;
   result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
   if(result == ERROR)
-    distance = 1000;
+    distance = 0xFFF;
   value[0] = (uint16_t)receive_buffer;
   
-  transmit_buffer[0] = SONAR_FIRST_ECHO_LOW;
+  transmit_buffer = SONAR_FIRST_ECHO_LOW;
+  setup.tx_data   = &transmit_buffer;
   result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
   if(result == ERROR)
-    distance = 1000;
+    distance = 0xFFF;
   value[1]= (uint16_t)receive_buffer;
   
   
@@ -616,6 +661,131 @@ int _getsonardist(uint8_t* args)
 
   sprintf((char*)str, "%x\r\n", distance);
   writeUSBOutString(str);
+  
+  return 0;
+}
+
+int _getsonarlum(uint8_t* args)
+{
+  I2C_M_SETUP_Type setup;
+  char*            arg_ptr;
+  unsigned int     index;
+  Status           result;
+  uint8_t          transmit_buffer;
+  uint8_t          arguments[1];
+  uint8_t          receive_buffer;
+  unsigned int     distance=0;
+  uint16_t	   value[2];
+    
+  for(index = 0; index < 1; index++)
+  {
+      arg_ptr = strtok(NULL, " ");
+      if(arg_ptr == NULL)
+	  return 1;
+
+      arguments[index] = strtoul(arg_ptr, NULL, 16);
+  }
+  
+  // Call for a measurement
+  setup.sl_addr7bit         = arguments[0];
+  setup.retransmissions_max = MAX_ST_I2C_RETRANSMISSIONS;
+  transmit_buffer = SONAR_LIGHT;
+  setup.tx_data   = &transmit_buffer;
+  setup.tx_length = 1;
+  setup.rx_data   = &receive_buffer;
+  setup.rx_length = 1;
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
+  if(result == ERROR)
+      distance = 0xFFF;
+  else
+      distance = receive_buffer;
+  
+  sprintf((char*)str, "%x\r\n", distance);
+  writeUSBOutString(str);
+  
+  return 0;
+}
+
+int _addsonar(uint8_t* args)
+{
+  I2C_M_SETUP_Type setup;
+  char*            arg_ptr;
+  unsigned int     index;
+  Status           result;
+  uint8_t          transmit_buffer[2];
+  uint8_t          arguments[2];
+  uint8_t          receive_buffer;
+    
+  for(index = 0; index < 2; index++)
+  {
+      arg_ptr = strtok(NULL, " ");
+      if(arg_ptr == NULL)
+	  return 1;
+
+      arguments[index] = strtoul(arg_ptr, NULL, 16);
+  }
+  
+  // Adressage sequence
+  setup.sl_addr7bit = arguments[0];
+  setup.retransmissions_max = MAX_ST_I2C_RETRANSMISSIONS;
+  transmit_buffer[0] = SONAR_COMMAND;
+  transmit_buffer[1] = 0xA0;
+  setup.tx_data   = transmit_buffer;
+  setup.tx_length = 2;
+  setup.rx_data   = &receive_buffer;
+  setup.rx_length = 0;
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
+  transmit_buffer[0] = SONAR_COMMAND;
+  transmit_buffer[1] = 0xAA;
+  setup.tx_data   = transmit_buffer;
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
+  transmit_buffer[0] = SONAR_COMMAND;
+  transmit_buffer[1] = 0xA5;
+  setup.tx_data   = transmit_buffer;
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
+  
+  transmit_buffer[0] = SONAR_COMMAND;
+  transmit_buffer[1] = arguments[1];
+  setup.tx_data   = transmit_buffer;
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
+  
+  return 0;
+}
+
+int _switchrelay(uint8_t* args)
+{
+  I2C_M_SETUP_Type setup;
+  char*            arg_ptr;
+  unsigned int     index;
+  Status           result;
+  uint8_t          transmit_buffer;
+  uint8_t          arguments[1];
+  uint8_t          receive_buffer;
+    
+  for(index = 0; index < 1; index++)
+  {
+      arg_ptr = strtok(NULL, " ");
+      if(arg_ptr == NULL)
+	  return 1;
+
+      arguments[index] = strtoul(arg_ptr, NULL, 16);
+  }
+  
+  // Adressage sequence
+  setup.sl_addr7bit = arguments[0];
+  setup.retransmissions_max = MAX_ST_I2C_RETRANSMISSIONS;
+  transmit_buffer = 0x01;
+  setup.tx_data   = &transmit_buffer;
+  setup.tx_length = 1;
+  setup.rx_data   = &receive_buffer;
+  setup.rx_length = 0;
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
+  transmit_buffer = 0x02;
+  setup.tx_data   = &transmit_buffer;
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
+  transmit_buffer = 0x03;
+  setup.tx_data   = &transmit_buffer;
+  result = I2C_MasterTransferData(i2cextern, &setup, I2C_TRANSFER_POLLING);
   
   return 0;
 }
