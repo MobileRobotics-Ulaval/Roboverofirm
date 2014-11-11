@@ -32,6 +32,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  ******************************************************************************/
 #define i2cextern LPC_I2C2
+#define VERSION 1
 
 #include "table.h"
 #include "return.h"
@@ -90,6 +91,12 @@ static int WriteStI2CRegister (I2C_M_SETUP_Type* setup, uint8_t register_address
         return 1;
 
     return 0;
+}
+
+int _getVersion(uint8_t * args)
+{
+  sprintf((char*)str, "%x\r\n", VERSION);
+  writeUSBOutString(str);
 }
 
 #define MAX_ST_I2C_RETRANSMISSIONS   3
@@ -573,7 +580,7 @@ int _asksonardist(uint8_t* args)
   uint8_t          arguments[1];
   uint8_t          receive_buffer;
   unsigned int     distance=0;
-  uint16_t	   value[2];
+//  uint16_t	   value[2];
     
   for(index = 0; index < 1; index++)
   {
@@ -675,7 +682,7 @@ int _getsonarlum(uint8_t* args)
   uint8_t          arguments[1];
   uint8_t          receive_buffer;
   unsigned int     distance=0;
-  uint16_t	   value[2];
+//  uint16_t	   value[2];
     
   for(index = 0; index < 1; index++)
   {
@@ -1054,6 +1061,8 @@ int _readMag(uint8_t * args)
 #define GYRO_CTRL_REG_1_ADDRESS 0x20
 #define GYRO_CTRL_REG_3_ADDRESS 0x22
 #define GYRO_CTRL_REG_4_ADDRESS 0x23
+#define GYRO_CTRL_REG_5_ADDRESS 0x24
+#define GYRO_FIFO_CTRL_REG      0x2E
 #define GYRO_DATA_ADDRESS       0x28
 
 #define GYRO_CTRL_REG_X_ENABLE 0x01
@@ -1074,7 +1083,8 @@ int _readMag(uint8_t * args)
 #define GYRO_CTRL_REG_SCALE_2000 0x20
 
 #define GYRO_CTRL_REG_BLOCK_UPDATE 0x80
-
+#define GYRO_CTRL_REG_FIFO_EN 0x40
+#define GYRO_FIFO_SRC_REG     0x2F
 #define GYRO_VALUE_OFFSET 32768
 
 int _configGyro (uint8_t* args)
@@ -1087,6 +1097,7 @@ int _configGyro (uint8_t* args)
     uint8_t          ctrl_reg_1_value;
     uint8_t          ctrl_reg_3_value;
     uint8_t          ctrl_reg_4_value;
+    uint8_t          fifo_ctrl_reg_value;
 
     for(index = 0; index < 6; index++)
     {
@@ -1131,8 +1142,8 @@ int _configGyro (uint8_t* args)
         return 1;
     }
 
-    ctrl_reg_3_value = GYRO_CTRL_REG_DATA_READY;
-    ctrl_reg_4_value = GYRO_CTRL_REG_BLOCK_UPDATE;
+    ctrl_reg_3_value = 0;//GYRO_CTRL_REG_DATA_READY;
+    ctrl_reg_4_value = 0;//GYRO_CTRL_REG_BLOCK_UPDATE;
 
     switch(arguments[5])
     {
@@ -1168,6 +1179,117 @@ int _configGyro (uint8_t* args)
     result = WriteStI2CRegister(&setup, GYRO_CTRL_REG_4_ADDRESS, ctrl_reg_4_value);
     if(result == 1)
         return 1;
+
+    result = WriteStI2CRegister(&setup, GYRO_FIFO_CTRL_REG, 3);
+    if(result == 1)
+        return 1;
+
+    fifo_ctrl_reg_value = 64+3;
+    result = WriteStI2CRegister(&setup, GYRO_FIFO_CTRL_REG, fifo_ctrl_reg_value);
+    if(result == 1)
+        return 1;
+
+    result = WriteStI2CRegister(&setup, GYRO_CTRL_REG_5_ADDRESS, GYRO_CTRL_REG_FIFO_EN);
+    if(result == 1)
+        return 1;
+
+    return 0;
+}
+
+int _getFifo(uint8_t * args)
+{
+    uint8_t          receive_buffer;
+    I2C_M_SETUP_Type setup;
+    Status           result;
+    uint8_t          transmit_buffer;
+    uint8_t          W_value,O_value,E_value,N_value;
+
+    setup.sl_addr7bit         = GYRO_I2C_SLAVE_ADDRESS;
+    setup.retransmissions_max = MAX_ST_I2C_RETRANSMISSIONS;
+
+    setup.tx_data   = &transmit_buffer;
+    setup.tx_length = 1;
+    setup.rx_data   = &receive_buffer;
+    setup.rx_length = 1;
+    transmit_buffer = GYRO_FIFO_SRC_REG;
+
+    result = I2C_MasterTransferData(LPC_I2C0, &setup, I2C_TRANSFER_POLLING);
+    if(result == ERROR)
+        return 1;
+
+    W_value=receive_buffer;
+    W_value&=(0x80);
+    W_value>>=7;
+    O_value=receive_buffer;
+    O_value&=(0x40);
+    O_value>>=6;
+    E_value=receive_buffer;
+    E_value&=(0x20);
+    E_value>>=5;
+    N_value=receive_buffer;
+    N_value&=(0x1F);
+    sprintf((char*)str, "%x\r\n%x\r\n%x\r\n%x\r\n", W_value, O_value, E_value, N_value);
+    writeUSBOutString(str);
+
+    return 0;
+}
+
+int _readGyroReg(uint8_t * args)
+{
+    uint8_t          receive_buffer;
+    I2C_M_SETUP_Type setup;
+    char*            formatted_string;
+    int          formatted_size;
+    Status           result;
+    uint8_t          transmit_buffer;
+
+    formatted_string = (char*)str;
+
+    setup.sl_addr7bit         = GYRO_I2C_SLAVE_ADDRESS;
+    setup.retransmissions_max = MAX_ST_I2C_RETRANSMISSIONS;
+
+    setup.tx_data   = &transmit_buffer;
+    setup.tx_length = 1;
+    setup.rx_data   = &receive_buffer;
+    setup.rx_length = 1;
+
+    transmit_buffer = GYRO_CTRL_REG_1_ADDRESS;
+    result = I2C_MasterTransferData(LPC_I2C0, &setup, I2C_TRANSFER_POLLING);
+    if(result == ERROR)
+        return 1;
+    formatted_size = sprintf(formatted_string, "%x\r\n", receive_buffer);
+    if(formatted_size > 0)
+         formatted_string += formatted_size;
+    transmit_buffer = GYRO_CTRL_REG_3_ADDRESS;
+    result = I2C_MasterTransferData(LPC_I2C0, &setup, I2C_TRANSFER_POLLING);
+    if(result == ERROR)
+        return 1;
+    formatted_size = sprintf(formatted_string, "%x\r\n", receive_buffer);
+    if(formatted_size > 0)
+         formatted_string += formatted_size;
+    transmit_buffer = GYRO_CTRL_REG_4_ADDRESS;
+    result = I2C_MasterTransferData(LPC_I2C0, &setup, I2C_TRANSFER_POLLING);
+    if(result == ERROR)
+        return 1;
+    formatted_size = sprintf(formatted_string, "%x\r\n", receive_buffer);
+    if(formatted_size > 0)
+         formatted_string += formatted_size;
+    transmit_buffer = GYRO_CTRL_REG_5_ADDRESS;
+    result = I2C_MasterTransferData(LPC_I2C0, &setup, I2C_TRANSFER_POLLING);
+    if(result == ERROR)
+        return 1;
+    formatted_size = sprintf(formatted_string, "%x\r\n", receive_buffer);
+    if(formatted_size > 0)
+         formatted_string += formatted_size;
+    transmit_buffer = GYRO_FIFO_CTRL_REG;
+    result = I2C_MasterTransferData(LPC_I2C0, &setup, I2C_TRANSFER_POLLING);
+    if(result == ERROR)
+        return 1;
+    formatted_size = sprintf(formatted_string, "%x\r\n", receive_buffer);
+    if(formatted_size > 0)
+         formatted_string += formatted_size;
+
+    writeUSBOutString(str);
 
     return 0;
 }
