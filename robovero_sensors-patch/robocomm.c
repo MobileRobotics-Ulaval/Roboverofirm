@@ -161,6 +161,64 @@ static inline unsigned long ReceiveULong (int serial_if)
     {
         printf("It has taken an unreasonable amount of time to receive data\n");
 
+        //exit(-1);
+	return 0;
+    }
+
+    received_value = 0;
+
+    while(1)
+    {
+        int  read_size;
+        char read_value;
+
+        read_size = read(serial_if, &read_value, 1);
+        if(read_size == -1)
+        {
+            printf("Error reading from serial port\n");
+
+            //exit(-1);
+	    WaitForReception(1);
+
+            continue;
+        }
+        else if(read_size == 0)
+        {
+            WaitForReception(1);
+
+            continue;
+        }
+
+        if(read_value >= '0' && read_value <= '9')
+            received_value = received_value*16+(read_value-'0');
+        else if(read_value >= 'a' && read_value <= 'f')
+            received_value = received_value*16+(read_value-'a'+10);
+        else if(read_value >= 'A' && read_value <= 'F')
+            received_value = received_value*16+(read_value-'A'+10);
+        else if(read_value == '\n')
+            break;
+        else if(read_value != '\r')
+        {
+            printf("Unexpected data received\n");
+            continue;
+            //exit(-1);
+        }
+    }
+
+    return received_value;
+	/*
+    struct pollfd poll_data;
+    unsigned long received_value;
+    int           signaled_count;
+
+    poll_data.fd     = serial_if;
+    poll_data.events = POLLIN;
+
+    signaled_count = poll(&poll_data, 1, 1000);
+    if(signaled_count == 0)
+    {
+        printf("It has taken an unreasonable amount of time to receive data\n");
+
         exit(-1);
     }
 
@@ -201,7 +259,7 @@ static inline unsigned long ReceiveULong (int serial_if)
         }
     }
 
-    return received_value;
+    return received_value;*/
 }
 
 
@@ -290,14 +348,10 @@ int main (int argc, char* argv[])
     
     printf("Stop heartbeat\n");
     TransmitCommand("heartbeatOff\r\n", serial_if);
-    sleep(1);
+    sleep(3);
     printf("Restart heartbeat\n");
     TransmitCommand("heartbeatOn\r\n", serial_if);
 
-    /*
-       Flush the input buffer.
-     */
-    tcflush(serial_if, TCIFLUSH);
 
     /*
        Configure the sensors -- NOTE all parameters are in hex, NOT decimal
@@ -305,15 +359,51 @@ int main (int argc, char* argv[])
     */
     //GPIO_SetDir(1, (1 << 0),1);//pinMode(P1_0, OUTPUT)
     //GPIO_ClearValue(1, (1 << 0));//digitalWrite(P1_0, 0)
-    TransmitCommand("GPIO_SetDir 1 1 1\r\n", serial_if);
-    TransmitCommand("GPIO_ClearValue 1 1\r\n", serial_if);
-    
-    TransmitCommand("configAccel 1 1 1 1 32 4\r\n", serial_if);
-    TransmitCommand("configMag 1 0 96 19\r\n", serial_if);
-    TransmitCommand("configGyro 1 1 1 1  64 fa\r\n", serial_if);
 
-    for(unsigned int data_point_count = 60; data_point_count-- > 0;)
-    {
+
+	char str[100];
+	int res[128];
+	int IssonarCon[128];
+	int i, j, add;
+	printf("InitSonar");
+	for(j = 0; j < 0; j++)
+	{
+		for(i=0;i<16;i++){ //from E0 to FE
+			add=(int)(0xE0)/2+i;
+			sprintf(str,"initsonar %X 6 A\r\n",add);
+			if(res[add]){
+				printf(" %x",add*2);
+				TransmitCommand(str, serial_if);
+				IssonarCon[i]=1;
+			}
+		}
+	}
+	/*
+	printf("I2C DEV:");
+	for(i=16;i<=128;i++){ //Skip IndicatorLED address...
+		sprintf(str,"scanI2C %X\r\n",i);
+		TransmitCommand(str, serial_if);
+		//res[i] = ReceiveULong(serial_if);
+		//if(res[i])
+			//printf(" 0x%x",i*2);
+	}*/
+
+	int address,reg, value;
+  for(i = 0; i < 50000; i++)
+  {
+      	address=0x90>>1;
+      	reg=0x0;
+      	value=0x4;
+      	
+      	/* Write mode */
+      	//address = address | 0x80; 
+      	/* Read*/
+      	sprintf(str,"receiveSerialOverI2C %X %X\r\n", address, reg);
+	/* Write */
+	//sprintf(str,"sendSerialOverI2C %X %X %X\r\n", address, reg, value);
+    	TransmitCommand(str, serial_if);
+        //sleep(1);
+	/*
         double x_axis;
         double y_axis;
         double z_axis;
@@ -342,8 +432,12 @@ int main (int argc, char* argv[])
 
         printf("Gyro:\t%.3f\t%.3f\t%.3f\n", x_axis, y_axis, z_axis);
 
-        sleep(1);
+	*/
     }
+    /*
+       Flush the input buffer.
+     */
+    tcflush(serial_if, TCIFLUSH);
 
     printf("Test complete\n");
 

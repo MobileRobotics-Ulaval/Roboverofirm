@@ -44,6 +44,7 @@
 #include "lpc17xx_uart.h"
 #include "lpc17xx_can.h"
 #include "lpc17xx_pwm.h"
+#include "lpc17xx_wdt.h"
 
 /*
  * global variables used by wrapper functions and extras
@@ -66,7 +67,7 @@ int _return(uint8_t * args)
     return 0;
 }
 
-static int WriteStI2CRegister (I2C_M_SETUP_Type* setup, uint8_t register_address, uint8_t value)
+int WriteStI2CRegister (I2C_M_SETUP_Type* setup, uint8_t register_address, uint8_t value)
 {
     uint8_t transmit_buffer[2];
     int     result;
@@ -237,7 +238,7 @@ int _setind(uint8_t* args)
     unsigned int     index;
     Status           result;
     uint8_t          transmit_buffer[4];
-    uint32_t          arguments[5];
+    uint32_t         arguments[5];
     uint8_t          receive_buffer;
   //i2c_smbus_write_word_data(file, commande, (argument << 8) | info1) >= 0
   for(index = 0; index < 5; index++)
@@ -1525,13 +1526,13 @@ int _promptOff(uint8_t * args)
 
 int _heartbeatOn(uint8_t * args)
 {
-    heartbeat_on = TRUE;
+    //heartbeat_on = TRUE;
     return 0;
 }
 
 int _heartbeatOff(uint8_t * args)
 {
-    heartbeat_on = FALSE;
+    //heartbeat_on = FALSE;
     return 0;
 }
 

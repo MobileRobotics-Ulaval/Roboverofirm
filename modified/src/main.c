@@ -40,6 +40,7 @@
 #include "lpc17xx_gpio.h"
 #include "lpc17xx_pinsel.h"
 #include "lpc17xx_can.h"
+#include "lpc17xx_wdt.h"
 
 /*****************************************************************************
 
@@ -56,7 +57,7 @@ void IntHandler(void)
      */
     __asm("mrs %0, ipsr;" : "=r"(int_num) );
     int_num -= 16;
-
+ 
     /*
      * Disable the interrupt
      */
@@ -107,17 +108,23 @@ void heartbeat(void)
 }
 
 extern int heartbeat_on;
-
+WDT_MODE_OPT WDTMode;
 int main(void)
 {
-    hwInit();
 
+
+    WDT_Init(WDT_CLKSRC_IRC, WDTMode);
+    WDT_Start(1000);
+
+    WDT_Feed();
+    hwInit();
 
     /*
      * let usbuser/robovero handle the rest
      */
     while (1)
-    {
+    {   
+        WDT_Feed();
         if (heartbeat_on)
             heartbeat();
     }

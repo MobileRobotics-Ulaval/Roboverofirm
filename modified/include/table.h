@@ -36,6 +36,8 @@
 #define __TABLE_H__
 
 #include "extras.h"
+#include "leddarone.h"
+#include "modbus.h"
 #include "_lpc17xx_pwm.h"
 #include "_lpc17xx_spi.h"
 #include "_lpc17xx_rtc.h"

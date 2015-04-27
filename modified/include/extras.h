@@ -36,6 +36,8 @@
 #define __EXTRAS_H__
 
 #include "lpc_types.h"
+#include "lpc17xx_i2c.h"
+
 
 extern int prompt_on;
 extern int heartbeat_on;
@@ -77,6 +79,8 @@ int _setind(uint8_t* args);
 int _sonar_wait(uint8_t id);
 
 void delayMs(uint8_t timer_num, uint32_t delayInMs);
+
+int WriteStI2CRegister (I2C_M_SETUP_Type* setup, uint8_t register_address, uint8_t value);
 
 #endif
 
