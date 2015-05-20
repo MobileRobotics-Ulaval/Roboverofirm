@@ -6,9 +6,9 @@ We aim to develop cubic blimps for artistic performances. They are entirely auto
 #### Addition to the original firmware
 
 - IMU driver based on https://github.com/agottem/robovero_sensors, with gyroscope buffering.
-- Second I2C bus for external devices
+- Use of a second I2C bus for external devices
 - Drivers for sonar SRF08, compass CMPS03, [LeddarOne](http://leddartech.com/en/products-sensors/leddar-one-module), [ESC BL-Ctrl v1.2](http://wiki.mikrokopter.de/en/BL-Ctrl_V1.2)
-- Addition of a watchdog reseting the board if I2C hangs
+- Addition of a watchdog reseting the board if the I2C bus hangs
 
 #### Installation
 
