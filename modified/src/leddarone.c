@@ -2,6 +2,7 @@
 
 #include "table.h"
 #include "return.h"
+#include "base64.h"
 
 #include "lpc17xx_pinsel.h"
 #include "lpc17xx_gpio.h"
@@ -11,9 +12,9 @@
 #include "lpc17xx_can.h"
 #include "lpc17xx_pwm.h"
 
-
-unsigned char buffer[1024];
-size_t lenBuff = 0;
+#define SERIAL_BUF_LEN 2048
+unsigned char serial_buf[SERIAL_BUF_LEN];
+size_t len_serial_buf = 0;
 
 int writeRegisterLeddar(uint8_t address_i2c, uint8_t reg, uint8_t value){
 	I2C_M_SETUP_Type setup;
@@ -115,9 +116,114 @@ int _sendSerialOverI2C(uint8_t * args){
 }
 
 /*
+ * Decode base64 data receive from overo and 
+ * add it to a local buffer.
+ */
+int _addDataToBuff(uint8_t * args){ 
+	char*            arg_ptr;
+	char* 			 b64_buff = 0;
+	unsigned char*   tmp_raw_buff;
+	unsigned int     index;
+	uint32_t         len_b64;
+	size_t         	 len_raw;
+
+	b64_buff = strtok(NULL, " ");
+	if(b64_buff == NULL)
+	    return 1;
+
+	//sprintf((char*)str, "len:%d str:%s\r\n", strlen(b64_buff), b64_buff);
+	//writeUSBOutString(str);
+
+	// Decode base64 to raw binary data
+	tmp_raw_buff = base64_decode(b64_buff,
+                  				 strlen(b64_buff),
+                  				 &len_raw);
+	if(tmp_raw_buff == NULL)
+		return 1;
+
+	// The local buffer must not overflow
+	if(len_serial_buf + len_raw >= SERIAL_BUF_LEN)
+		return 1;
+
+	// Copy temporary buffer to the end of the local buffer
+	memcpy(serial_buf + len_serial_buf, 
+		   tmp_raw_buff, 
+		   len_raw);
+
+	len_serial_buf += len_raw;
+
+
+	//sprintf((char*)str, "len:%d %2.2X %2.2X %2.2X\r\n", len_raw, tmp_raw_buff[0], tmp_raw_buff[1], tmp_raw_buff[2]);
+	//writeUSBOutString(str);
+
+	// Free temporary buffer
+	free(tmp_raw_buff);
+
+	return 0;
+}
+
+/*
+ * Read all of the FIFO, encode it in base64, send it back to the overo
+ */
+int _readFIFO(uint8_t * args){ 
+	char*            arg_ptr;
+	unsigned int     index;
+	uint32_t         address;
+	size_t 			 rev_len;
+	//unsigned char*	 rev_buff;
+	int 			 i;
+	size_t 		     b64_len;
+	char* 			 b64_buff;
+	unsigned char 	 rev_buff[256]; // Can not be larger than 64
+
+	arg_ptr = strtok(NULL, " ");
+	if(arg_ptr == NULL)
+	    return 1;
+
+	address = strtoul(arg_ptr, NULL, 16);
+
+	rev_len = readRegisterLeddar(address, LEDDARONE_RXLVL);
+
+	/*if(rev_len == 0){
+		sprintf((char*)str, "\r\n");
+		writeUSBOutString(str);
+		writeUSBOutString("0\r\n");
+		return 0;
+	}//*/
+
+	//rev_buff = (unsigned char *)malloc(rev_len);
+	//if(rev_buff == NULL)
+	//	return 1;
+
+	for(i = 0; i < rev_len; i++)
+		rev_buff[i] = readRegisterLeddar(address, LEDDARONE_TRANSMIT_AND_RECEIVE);
+	
+	b64_buff = base64_encode(rev_buff,	   
+                  			 rev_len,
+                  			 &b64_len);
+	if(b64_buff == NULL)
+		return 1;
+
+	sprintf((char*)str, "%X %s \r\n", b64_len, b64_buff);
+	//memcpy(str, b64_buff, b64_len);
+	//str[b64_len] = '\r';
+	//str[b64_len + 1] = '\n';
+	writeUSBOutString(str);
+
+	// Send debug string
+	//sprintf((char*)str, "%x\r\n", (unsigned int)b64_len);
+	//writeUSBOutString(str);
+
+	free(b64_buff);
+	//free(rev_buff);
+
+	return  0;
+}
+
+/*
  * Add byte to a buffer before send it
  */
-int _addBytesToBuff(uint8_t * args){ 
+int _addByteToBuff(uint8_t * args){ 
 	char*            arg_ptr;
 	unsigned int     index;
 	uint32_t         arguments[2];
@@ -131,11 +237,11 @@ int _addBytesToBuff(uint8_t * args){
 		arguments[index] = strtoul(arg_ptr, NULL, 16);
 	}
 
-	buffer[lenBuff++] = arguments[0];
+	serial_buf[len_serial_buf++] = arguments[0];
 
 	// Wrap around, should use error handling of some kind
-	if(lenBuff >= 1024)
-		lenBuff = 0;
+	if(len_serial_buf >= SERIAL_BUF_LEN)
+		len_serial_buf = 0;
 
 	return 0;
 }
@@ -157,19 +263,22 @@ int _sendBufferOverI2C(uint8_t * args){
 		arguments[index] = strtoul(arg_ptr, NULL, 16);
 	}
 
-	int res = writeMultiDataRegisterLeddar(arguments[0], LEDDARONE_TRANSMIT_AND_RECEIVE, buffer, lenBuff);
-	lenBuff = 0;
+	int res = writeMultiDataRegisterLeddar(arguments[0], LEDDARONE_TRANSMIT_AND_RECEIVE, serial_buf, len_serial_buf);
+	len_serial_buf = 0;
 
 	return res;
 }
 
+/**
+	Receive a byte from the serial RX FIFO of the SC16IS750
+*/
 int _receiveSerialOverI2C(uint8_t * args){ 
 	char*            arg_ptr;
 	unsigned int     index;
 	uint32_t         arguments[2];
 	uint8_t          receive_buffer;
 	char* 	     str;
-	//i2c_smbus_write_word_data(file, commande, (argument << 8) | info1) >= 0
+
 	for(index = 0; index < 2; index++)
 	{
 		arg_ptr = strtok(NULL, " ");
@@ -186,7 +295,9 @@ int _receiveSerialOverI2C(uint8_t * args){
 	return 0;
 }
 
-
+/**
+	Test the connectivity of the SC16IS750
+*/
 int _testLeddar(uint8_t * args){ 
 	char*            arg_ptr;
 	unsigned int     index;
@@ -194,7 +305,7 @@ int _testLeddar(uint8_t * args){
 	uint8_t          good_parameter;
 	uint8_t          received;
 	char* 	     	 str;
-	//i2c_smbus_write_word_data(file, commande, (argument << 8) | info1) >= 0
+
 	for(index = 0; index < 1; index++)
 	{
 		arg_ptr = strtok(NULL, " ");
@@ -228,6 +339,9 @@ int _testLeddar(uint8_t * args){
 	return 0;
 }
 
+/**
+	Reset state of the SC16IS750
+*/
 int _resetDevice(uint8_t * args){ 
 	char*            arg_ptr;
 	uint32_t         arguments;
@@ -241,23 +355,24 @@ int _resetDevice(uint8_t * args){
 	uint8_t address_i2c = arguments;
 
 	int temp_iocontrol = readRegisterLeddar(address_i2c, LEDDARONE_IOCONTROL);
-	temp_iocontrol |= 0x08;
+	temp_iocontrol |= 0x08; // Reset Flag
 	writeRegisterLeddar(address_i2c, LEDDARONE_IOCONTROL, temp_iocontrol); 
+
+	// Reset the size of the local buffer
+	len_serial_buf = 0; 
 
 	return 0;
 }
 
 int _setSerialBaudrate(uint8_t * args){ 
 	char*            arg_ptr;
-	uint32_t         arguments;
+	uint8_t 		 address_i2c;
 	
 	arg_ptr = strtok(NULL, " ");
 	if(arg_ptr == NULL)
 	    return 1;
 
-	arguments = strtoul(arg_ptr, NULL, 16);
-
-	uint8_t address_i2c = arguments;
+	address_i2c = strtoul(arg_ptr, NULL, 16);
 
 	int prescaler;
 	if ( (readRegisterLeddar(address_i2c, LEDDARONE_MCR)&0x80) == 0) { 
@@ -268,25 +383,27 @@ int _setSerialBaudrate(uint8_t * args){
 	}
 
 	uint16_t divisor = (LEDDARONE_CRYSTAL_div_BAUDRATE/prescaler)/16;
-	uint8_t temp_lcr = readRegisterLeddar(address_i2c, LEDDARONE_LCR);
-	temp_lcr |= 0x80;
-	writeRegisterLeddar(address_i2c, LEDDARONE_LCR, temp_lcr);
+	uint8_t tmp_lcr = readRegisterLeddar(address_i2c, LEDDARONE_LCR);
+	tmp_lcr |= 0x80;
+	writeRegisterLeddar(address_i2c, LEDDARONE_LCR, tmp_lcr);
 	//write to DLL
 	writeRegisterLeddar(address_i2c, LEDDARONE_DLL, (uint8_t)divisor);
 	//write to DLH
 	writeRegisterLeddar(address_i2c, LEDDARONE_DLH, (uint8_t)(divisor>>8));
-	temp_lcr &= 0x7F;
-	writeRegisterLeddar(address_i2c, LEDDARONE_LCR, temp_lcr); 
+	tmp_lcr &= 0x7F;
+	writeRegisterLeddar(address_i2c, LEDDARONE_LCR, tmp_lcr); 
 
 	// Set Fifo to enable
-	uint8_t temp_fcr = readRegisterLeddar(address_i2c, LEDDARONE_LCR);
-	temp_fcr |= 0x01;
-	writeRegisterLeddar(address_i2c, LEDDARONE_FCR, temp_fcr); 
+	uint8_t tmp_fcr = readRegisterLeddar(address_i2c, LEDDARONE_LCR);
+	tmp_fcr |= 0x01;
+	writeRegisterLeddar(address_i2c, LEDDARONE_FCR, tmp_fcr); 
 
 	return 0;
 }
 
-
+/**
+	Set serial configuration of the SC16IS750
+*/
 int _setLine(uint8_t * args){ 	
 	char*            arg_ptr;
 	uint32_t         arguments;
@@ -308,6 +425,9 @@ int _setLine(uint8_t * args){
 	return 0;
 }
 
+/**
+	Return number of the byte in the receive FIFO of the SC16IS750
+*/
 int _getFIFOAvailableData(uint8_t * args){
 	char*            arg_ptr;
 	unsigned int     index;

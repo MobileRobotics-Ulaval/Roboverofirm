@@ -396,7 +396,8 @@ void processCmd(uint8_t * cmd)
 	int (*fcn_ptr)(uint8_t *);
 	unsigned long int fcn_index = 0;
 	int i;
-
+	//uint8_t* cpy_cmd = malloc(strlen(cmd));
+	//memcpy(cpy_cmd, cmd, strlen(cmd));
 	/*
 	 * get the first argument sent
 	 */
@@ -451,6 +452,7 @@ void processCmd(uint8_t * cmd)
 	 * call the requested function
 	 */
 	ret = fcn_ptr(cmd + strlen((char *) cmd) + 1);
+	//ret = fcn_ptr(cpy_cmd);
 	if (prompt_on)
 	{
 		if (ret)

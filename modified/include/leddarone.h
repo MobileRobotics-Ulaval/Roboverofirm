@@ -28,7 +28,9 @@ int writeRegisterLeddar(uint8_t address_i2c, uint8_t reg, uint8_t value);
 int writeMultiDataRegisterLeddar(uint8_t address_i2c, uint8_t reg, unsigned char *aData, int aLength );
 uint8_t readRegisterLeddar(uint8_t address_i2c, uint8_t reg);
 int _sendSerialOverI2C(uint8_t * args);
-int _addBytesToBuff(uint8_t * args);
+int _addDataToBuff(uint8_t * args);
+int _readFIFO(uint8_t * args);
+int _addByteToBuff(uint8_t * args);
 int _sendBufferOverI2C(uint8_t * args);
 int _receiveSerialOverI2C(uint8_t * args);
 

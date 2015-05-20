@@ -84,8 +84,10 @@ const _nxp_function driver_table[] = {
     {(uint8_t *) "setLine", _setLine},
     {(uint8_t *) "testLeddar", _testLeddar},
     {(uint8_t *) "getFIFOAvailableData", _getFIFOAvailableData},
-    {(uint8_t *) "mobusInteract", _mobusInteract},
-    {(uint8_t *) "addBytesToBuff", _addBytesToBuff},
+    //{(uint8_t *) "mobusInteract", _mobusInteract},
+    {(uint8_t *) "l", _addDataToBuff}, // This function's name is kept short, because it requires of the maximum number of caracters
+    {(uint8_t *) "r", _readFIFO},
+    {(uint8_t *) "addByteToBuff", _addByteToBuff},
     {(uint8_t *) "sendBufferOverI2C", _sendBufferOverI2C},
 //    {(uint8_t *) "PWM_PinConfig", _PWM_PinConfig},
     {(uint8_t *) "PWM_GetCaptureValue", _PWM_GetCaptureValue},
