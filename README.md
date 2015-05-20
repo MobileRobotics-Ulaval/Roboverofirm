@@ -1,5 +1,8 @@
 # Modified Robovero Firmware
 
+# Project
+We aim to develop cubic blimps for artistic performances. They are entirely autonomous, based on IMU, sonars and USB cameras. Localization, control and interaction behaviors are developped in ROS. In the current state of our work, only 2 nodes run on the gumstix: one to handle the Robovero hardware (sonars, motors, battery level) and the other for the USB cameras (PointGrey). More information [here](http://robot.gmc.ulaval.ca/en/research/theme409.html).
+
 #### Addition to the original firmware
 
 - IMU driver based on https://github.com/agottem/robovero_sensors
