@@ -120,7 +120,7 @@ int _sendSerialOverI2C(uint8_t * args){
  */
 int _addDataToBuff(uint8_t * args){ 
 	char* 			 b64_buff = 0;
-	unsigned char    tmp_raw_buff[256];
+	//unsigned char    tmp_raw_buff[256];
 	size_t         	 len_raw;
 	//uint32_t         len_b64;
 
@@ -133,7 +133,7 @@ int _addDataToBuff(uint8_t * args){
 
 	// Decode base64 to raw binary data
 	base64_decode(b64_buff,
-				  tmp_raw_buff,
+				  serial_buf + len_serial_buf,
   				  strlen(b64_buff),
   				  &len_raw);
 
@@ -144,14 +144,15 @@ int _addDataToBuff(uint8_t * args){
 	}
 
 	// Copy temporary buffer to the end of the local buffer
-	memcpy(serial_buf + len_serial_buf, 
+	/*memcpy(serial_buf + len_serial_buf, 
 		   tmp_raw_buff, 
-		   len_raw);
+		   len_raw);*/
 
 	len_serial_buf += len_raw;
 
 	// Free temporary buffer
 	//free(tmp_raw_buff);
+	writeUSBOutString((uint8_t)"1\r\n");
 
 	return 0;
 }
