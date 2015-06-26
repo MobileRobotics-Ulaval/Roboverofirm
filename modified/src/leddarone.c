@@ -152,7 +152,6 @@ int _addDataToBuff(uint8_t * args){
 
 	// Free temporary buffer
 	//free(tmp_raw_buff);
-	writeUSBOutString((uint8_t)"1\r\n");
 
 	return 0;
 }
@@ -271,6 +270,8 @@ int _sendBufferOverI2C(uint8_t * args){
 
 	int res = writeMultiDataRegisterLeddar(arguments[0], LEDDARONE_TRANSMIT_AND_RECEIVE, serial_buf, len_serial_buf);
 	len_serial_buf = 0;
+
+	writeUSBOutString("1\r\n");
 
 	return res;
 }
